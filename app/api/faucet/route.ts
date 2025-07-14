@@ -11,26 +11,47 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // The official faucet now requires authentication, so we'll provide manual instructions
-    console.log('Faucet request received for address:', address);
-    
-    // Return manual instructions since automatic faucet requires auth
+    console.log('Faucet request for address:', address);
+
+    // Return updated manual instructions with working alternatives
     return NextResponse.json({
       success: false,
-      message: 'Automatic faucet is currently unavailable due to authentication requirements.',
+      message: 'Please use one of these working testnet faucets:',
       manual_instructions: {
-        message: 'Please use the manual faucet to get testnet tokens',
-        steps: [
-          '1. Go to https://aptoslabs.com/testnet-faucet',
-          '2. Paste your address in the input field',
-          '3. Click "Fund Account" button',
-          '4. Wait for the transaction to complete',
-          '5. Refresh this page to see your balance'
+        message: 'Multiple faucet options available',
+        faucets: [
+          {
+            name: 'Aptos CLI Faucet',
+            method: 'command_line',
+            instructions: [
+              '1. Install Aptos CLI: curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3',
+              '2. Run: aptos account fund-with-faucet --account YOUR_ADDRESS'
+            ]
+          },
+          {
+            name: 'Aptos TypeScript SDK',
+            method: 'direct_api',
+            url: 'https://fullnode.testnet.aptoslabs.com',
+            instructions: [
+              '1. Use direct API calls to the Aptos faucet endpoint',
+              '2. POST to: https://faucet.testnet.aptoslabs.com/mint',
+              '3. With body: {"address": "YOUR_ADDRESS", "amount": 100000000}'
+            ]
+          },
+          {
+            name: 'Alternative Faucets',
+            method: 'third_party',
+            options: [
+              'https://www.alchemy.com/faucets/aptos-testnet',
+              'https://faucet.triangleplatform.com/aptos/testnet',
+              'Discord: Aptos Community #testnet-faucet channel'
+            ]
+          }
         ],
-        address: address,
-        faucet_url: 'https://aptoslabs.com/testnet-faucet'
+        your_address: address,
+        note: 'If all faucets fail, try asking in the Aptos Discord community.'
       }
-    }, { status: 200 }); // Return 200 instead of 400 since this is expected behavior
+    }, { status: 200 });
 
   } catch (error: any) {
     console.error('Faucet error:', error);
@@ -38,15 +59,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: false,
       message: 'Faucet service error',
-      manual_instructions: {
-        message: 'Please use the manual faucet to get testnet tokens',
-        steps: [
-          '1. Go to https://aptoslabs.com/testnet-faucet',
-          '2. Paste your address in the input field',
-          '3. Click "Fund Account" button'
-        ],
-        faucet_url: 'https://aptoslabs.com/testnet-faucet'
-      },
       error: error.message || 'Unknown error occurred'
     }, { status: 500 });
   }

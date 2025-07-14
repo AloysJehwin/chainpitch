@@ -4,6 +4,20 @@ import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 const aptosConfig = new AptosConfig({ network: Network.TESTNET });
 const aptos = new Aptos(aptosConfig);
 
+// Type definitions for better type safety
+interface CoinStoreData {
+  coin?: {
+    value: string;
+  };
+  value?: string;
+  [key: string]: any;
+}
+
+interface AccountResource {
+  type: string;
+  data: CoinStoreData;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get('address');
@@ -20,55 +34,62 @@ export async function GET(request: NextRequest) {
     console.log('Resources found:', resources.length);
     
     const accountResource = resources.find(
-      (r: any) => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+      (r: any): r is AccountResource => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
     );
     
     if (accountResource) {
-      console.log('Account resource:', JSON.stringify(accountResource, null, 2));
+      console.log('Account resource found:', accountResource.type);
       
-      // Handle different possible data structures
+      // Safe property access with fallbacks
       let balance = '0';
+      const data = accountResource.data as CoinStoreData;
       
-      if (accountResource.data?.coin?.value) {
-        balance = accountResource.data.coin.value;
-      } else if (accountResource.data?.value) {
-        balance = accountResource.data.value;
-      } else if (typeof accountResource.data === 'string') {
-        balance = accountResource.data;
-      } else {
-        console.log('Unexpected resource structure:', accountResource.data);
-        // Try to find balance in any nested structure
-        const findBalance = (obj: any): string => {
-          if (typeof obj === 'string' && /^\d+$/.test(obj)) return obj;
-          if (typeof obj === 'number') return obj.toString();
-          if (obj && typeof obj === 'object') {
-            for (const key in obj) {
-              if (key === 'value' && typeof obj[key] === 'string') return obj[key];
-              if (key === 'balance' && typeof obj[key] === 'string') return obj[key];
-              const result = findBalance(obj[key]);
-              if (result !== '0') return result;
+      // Try different possible structures
+      if (data && typeof data === 'object') {
+        if (data.coin && typeof data.coin === 'object' && data.coin.value) {
+          balance = data.coin.value;
+          console.log('Found balance in data.coin.value:', balance);
+        } else if (data.value) {
+          balance = data.value;
+          console.log('Found balance in data.value:', balance);
+        } else {
+          // Search for any property that looks like a balance
+          const keys = Object.keys(data);
+          for (const key of keys) {
+            const value = data[key];
+            if (typeof value === 'string' && /^\d+$/.test(value)) {
+              balance = value;
+              console.log(`Found balance in data.${key}:`, balance);
+              break;
+            }
+            if (typeof value === 'object' && value && 'value' in value) {
+              const nestedValue = (value as any).value;
+              if (typeof nestedValue === 'string' && /^\d+$/.test(nestedValue)) {
+                balance = nestedValue;
+                console.log(`Found balance in data.${key}.value:`, balance);
+                break;
+              }
             }
           }
-          return '0';
-        };
-        balance = findBalance(accountResource.data);
+        }
       }
       
-      const balanceNumber = parseInt(balance) / 100000000; // Convert from Octas to APT
+      const balanceNumber = parseInt(balance || '0') / 100000000; // Convert from Octas to APT
       
       return NextResponse.json({
         balance: balanceNumber,
         raw_balance: balance,
         debug_info: {
           resource_type: accountResource.type,
-          data_structure: typeof accountResource.data,
-          has_coin: !!accountResource.data?.coin,
-          has_value: !!accountResource.data?.value
+          data_keys: data ? Object.keys(data) : [],
+          data_structure: JSON.stringify(data, null, 2)
         }
       });
     } else {
       // Account might not be initialized yet
       console.log('No coin store found for address:', address);
+      console.log('Available resource types:', resources.map((r: any) => r.type));
+      
       return NextResponse.json({
         balance: 0,
         raw_balance: '0',

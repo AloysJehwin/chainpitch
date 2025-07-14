@@ -59,36 +59,46 @@ const WalletConnection: React.FC = () => {
     
     try {
       const addressStr = getAddressString(account.address);
-      if (!addressStr) return;
-      
-      // Try primary balance API first
-      let response = await fetch(`/api/balance?address=${addressStr}`);
-      let data = await response.json();
-      
-      // If primary fails, try alternative API
-      if (!response.ok || (data.balance === 0 && data.debug_info?.message?.includes('not found'))) {
-        console.log('Trying alternative balance API...');
-        response = await fetch(`/api/balance-alt?address=${addressStr}`);
-        data = await response.json();
+      if (!addressStr) {
+        console.log('Invalid address format');
+        return;
       }
       
-      if (response.ok) {
-        const balanceValue = data.balance ?? 0;
-        setBalance(balanceValue);
-        setError('');
-        
-        // Log debug info if available
-        if (data.debug_info || data.method) {
-          console.log('Balance fetch info:', data);
-        }
-      } else {
-        console.error('Both balance APIs failed:', data);
-        setError('Failed to fetch balance - account may not be initialized');
-        setBalance(0);
+      console.log('Fetching balance for address:', addressStr);
+      
+      // Test API connectivity first
+      try {
+        const testResponse = await fetch('/api/test');
+        const testData = await testResponse.json();
+        console.log('API test successful:', testData);
+      } catch (testError) {
+        console.error('API test failed:', testError);
+        setError('API server not responding');
+        return;
       }
-    } catch (error) {
-      console.error('Error fetching balance:', error);
-      setError('Network error while fetching balance');
+      
+      // Now try to fetch balance
+      const response = await fetch(`/api/balance-working?address=${addressStr}`);
+      console.log('Balance API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Balance API HTTP error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Balance API response:', data);
+      
+      const balanceValue = data.balance ?? 0;
+      setBalance(balanceValue);
+      setError('');
+      
+      console.log('Balance set to:', balanceValue, 'APT');
+      
+    } catch (error: any) {
+      console.error('Balance fetch error:', error);
+      setError(`Failed to fetch balance: ${error.message}`);
       setBalance(0);
     }
   }, [account?.address, getAddressString]);
@@ -146,8 +156,9 @@ const WalletConnection: React.FC = () => {
         setError('Invalid address format');
         return;
       }
-        
-      const response = await fetch('/api/faucet', {
+
+      // Try direct faucet first
+      const response = await fetch('/api/faucet-direct', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,69 +175,124 @@ const WalletConnection: React.FC = () => {
         setTxnHash(data.txn_hash || '');
         setError('');
         
-        // Refresh balance and transactions after funding
+        // Refresh balance after funding
         setTimeout(() => {
           fetchBalance();
           fetchTransactions();
         }, 3000);
       } else {
-        // Handle manual faucet instructions
-        if (data.manual_instructions) {
-          const instructions = data.manual_instructions;
+        // Show alternative faucet options
+        if (data.alternatives) {
           setError(
             <div>
-              <p><strong>{instructions.message}</strong></p>
-              <div style={{ marginTop: '10px' }}>
-                {instructions.steps?.map((step: string, index: number) => (
-                  <div key={index} style={{ marginBottom: '5px' }}>
-                    {step}
+              <p><strong>{data.message}</strong></p>
+              <div style={{ marginTop: '15px' }}>
+                <p><strong>Working Alternatives:</strong></p>
+                {data.alternatives.map((alt: any, index: number) => (
+                  <div key={index} style={{ 
+                    marginTop: '10px', 
+                    padding: '10px', 
+                    background: '#f0f8ff', 
+                    borderRadius: '5px',
+                    border: '1px solid #ccc'
+                  }}>
+                    <div style={{ fontWeight: 'bold', color: '#2563eb' }}>{alt.name}</div>
+                    {alt.url && (
+                      <div style={{ marginTop: '5px' }}>
+                        <a 
+                          href={alt.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ color: '#1976d2', textDecoration: 'underline' }}
+                        >
+                          🔗 {alt.url}
+                        </a>
+                      </div>
+                    )}
+                    {alt.command && (
+                      <div style={{ 
+                        marginTop: '5px', 
+                        fontFamily: 'monospace', 
+                        background: '#f5f5f5', 
+                        padding: '5px',
+                        borderRadius: '3px',
+                        fontSize: '0.9em'
+                      }}>
+                        {alt.command}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.9em', color: '#666', marginTop: '5px' }}>
+                      {alt.description}
+                    </div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: '10px' }}>
-                <strong>Your Address:</strong> <span className="full-address">{addressStr}</span>
-              </div>
-              <div style={{ marginTop: '10px' }}>
-                <a 
-                  href={instructions.faucet_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{ 
-                    color: '#1976d2', 
-                    textDecoration: 'underline',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  🚰 Open Testnet Faucet →
-                </a>
+              <div style={{ 
+                marginTop: '15px', 
+                padding: '10px', 
+                background: '#fff3cd', 
+                borderRadius: '5px',
+                border: '1px solid #ffeaa7'
+              }}>
+                <strong>Your Address:</strong>
+                <div style={{ 
+                  fontFamily: 'monospace', 
+                  fontSize: '0.9em', 
+                  background: '#f8f9fa', 
+                  padding: '5px',
+                  marginTop: '5px',
+                  borderRadius: '3px',
+                  wordBreak: 'break-all'
+                }}>
+                  {addressStr}
+                </div>
               </div>
             </div>
           );
         } else {
-          setError(`Faucet request failed: ${data.message}`);
+          setError(`Faucet failed: ${data.message}`);
         }
       }
     } catch (error: any) {
       setError(
         <div>
-          <p>Faucet service is currently unavailable.</p>
-          <p><strong>Please use the manual faucet:</strong></p>
+          <p><strong>Faucet service unavailable.</strong></p>
+          <p>Please try these working alternatives:</p>
           <div style={{ marginTop: '10px' }}>
-            <a 
-              href="https://aptoslabs.com/testnet-faucet" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              style={{ 
-                color: '#1976d2', 
-                textDecoration: 'underline',
-                fontWeight: 'bold'
-              }}
-            >
-              🚰 Open Testnet Faucet →
-            </a>
-          </div>
-          <div style={{ marginTop: '5px' }}>
-            <strong>Your Address:</strong> <span className="full-address">{getAddressString(account?.address)}</span>
+            <div style={{ marginBottom: '10px' }}>
+              <strong>🔗 Alchemy Faucet:</strong>
+              <br />
+              <a 
+                href="https://www.alchemy.com/faucets/aptos-testnet" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#1976d2', textDecoration: 'underline' }}
+              >
+                https://www.alchemy.com/faucets/aptos-testnet
+              </a>
+            </div>
+            <div style={{ marginBottom: '10px' }}>
+              <strong>💬 Discord:</strong>
+              <br />
+              <a 
+                href="https://discord.gg/aptoslabs" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{ color: '#1976d2', textDecoration: 'underline' }}
+              >
+                Ask in #testnet-faucet channel
+              </a>
+            </div>
+            <div style={{ 
+              marginTop: '10px', 
+              padding: '8px', 
+              background: '#f5f5f5', 
+              borderRadius: '4px',
+              fontFamily: 'monospace',
+              fontSize: '0.9em'
+            }}>
+              <strong>Your Address:</strong> {getAddressString(account?.address)}
+            </div>
           </div>
         </div>
       );
@@ -391,6 +457,18 @@ const WalletConnection: React.FC = () => {
             className="action-btn faucet-btn"
           >
             {isLoading ? 'Processing...' : '🚰 Get Testnet Tokens'}
+          </button>
+
+          <button 
+            onClick={fetchBalance}
+            disabled={isLoading}
+            className="action-btn refresh-btn"
+            style={{ 
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              color: 'white'
+            }}
+          >
+            🔄 Refresh Balance
           </button>
           
           <button 
