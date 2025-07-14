@@ -1,4 +1,3 @@
-// app/api/account/transactions/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 

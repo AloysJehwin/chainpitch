@@ -1,4 +1,3 @@
-// app/page.tsx
 import WalletConnection from './components/WalletConnection';
 
 export default function Home() {

@@ -1,71 +1,80 @@
-// app/types/aptos.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-export interface WalletAccount {
-  address: string;
-  publicKey: string;
-}
+export async function POST(request: NextRequest) {
+  try {
+    const { transaction, signature } = await request.json();
 
-export interface TransactionResponse {
-  hash: string;
-  sender: string;
-  sequence_number: string;
-  max_gas_amount: string;
-  gas_unit_price: string;
-  gas_used: string;
-  success: boolean;
-  version: string;
-  changes: any[];
-  events: any[];
-  timestamp: string;
-  type?: string;
-}
+    if (!transaction) {
+      return NextResponse.json({ 
+        valid: false, 
+        message: 'Transaction is required' 
+      }, { status: 400 });
+    }
 
-export interface BalanceResponse {
-  balance: number;
-  raw_balance: string;
-}
+    // Basic validation
+    if (!transaction.data || !transaction.data.function) {
+      return NextResponse.json({ 
+        valid: false, 
+        message: 'Invalid transaction format' 
+      }, { status: 400 });
+    }
 
-export interface FaucetRequest {
-  address: string;
-  amount?: number;
-}
+    // Validate function format
+    const functionName = transaction.data.function;
+    if (!functionName.includes('::')) {
+      return NextResponse.json({ 
+        valid: false, 
+        message: 'Invalid function format' 
+      }, { status: 400 });
+    }
 
-export interface FaucetResponse {
-  success: boolean;
-  message: string;
-  txn_hash?: string;
-  error?: string;
-}
+    // Validate recipient address format (for transfer transactions)
+    if (functionName === '0x1::coin::transfer') {
+      const functionArgs = transaction.data.functionArguments;
+      if (!functionArgs || functionArgs.length < 2) {
+        return NextResponse.json({ 
+          valid: false, 
+          message: 'Transfer function requires recipient and amount' 
+        }, { status: 400 });
+      }
 
-export interface TransactionRequest {
-  data: {
-    function: string;
-    functionArguments: (string | number)[];
-    typeArguments: string[];
-  };
-}
+      const recipient = functionArgs[0];
+      if (!recipient.startsWith('0x')) {
+        return NextResponse.json({ 
+          valid: false, 
+          message: 'Invalid recipient address format' 
+        }, { status: 400 });
+      }
 
-export interface ValidationRequest {
-  transaction: TransactionRequest;
-  signature: string | null;
-}
+      // Validate amount
+      const amount = functionArgs[1];
+      if (isNaN(Number(amount)) || Number(amount) <= 0) {
+        return NextResponse.json({ 
+          valid: false, 
+          message: 'Invalid amount' 
+        }, { status: 400 });
+      }
+    }
 
-export interface ValidationResponse {
-  valid: boolean;
-  message: string;
-  error?: string;
-}
+    // Validate type arguments
+    if (!transaction.data.typeArguments || transaction.data.typeArguments.length === 0) {
+      return NextResponse.json({ 
+        valid: false, 
+        message: 'Type arguments are required' 
+      }, { status: 400 });
+    }
 
-export interface TransactionHistoryResponse {
-  success: boolean;
-  transactions: TransactionResponse[];
-  message?: string;
-  error?: string;
-}
-
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  error?: string;
+    return NextResponse.json({ 
+      valid: true, 
+      message: 'Transaction is valid' 
+    });
+  } catch (error: any) {
+    console.error('Error validating transaction:', error);
+    
+    return NextResponse.json({ 
+      valid: false, 
+      message: 'Error validating transaction',
+      error: error.message || 'Unknown error occurred'
+    }, { status: 500 });
+  }
 }

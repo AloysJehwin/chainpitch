@@ -1,13 +1,7 @@
-// app/components/WalletConnection.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
-import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
-
-// Initialize Aptos client
-const aptosConfig = new AptosConfig({ network: Network.TESTNET });
-const aptos = new Aptos(aptosConfig);
 
 interface TransactionPayload {
   function: string;
@@ -31,32 +25,101 @@ const WalletConnection: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [recipientAddress, setRecipientAddress] = useState<string>('0x1');
   const [amount, setAmount] = useState<string>('0.01');
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-  // Fetch balance when account changes
-  useEffect(() => {
-    if (account) {
-      fetchBalance();
+  // Helper functions
+  const getAddressString = useCallback((address: any): string => {
+    if (typeof address === 'string') return address;
+    if (address && typeof address === 'object' && address.address) return address.address;
+    if (address && typeof address.toString === 'function') return address.toString();
+    return '';
+  }, []);
+
+  const formatAddress = useCallback((address: string | any): string => {
+    if (typeof address === 'string') {
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
     }
-  }, [account]);
+    
+    if (address && typeof address === 'object' && address.address) {
+      const addr = address.address;
+      return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    }
+    
+    if (address && typeof address.toString === 'function') {
+      const addr = address.toString();
+      return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    }
+    
+    return 'Invalid Address';
+  }, []);
 
-  const fetchBalance = async (): Promise<void> => {
-    if (!account) return;
+  // Fetch functions
+  const fetchBalance = useCallback(async (): Promise<void> => {
+    if (!account?.address) return;
     
     try {
-      const response = await fetch(`/api/balance?address=${account.address}`);
-      const data = await response.json();
+      const addressStr = getAddressString(account.address);
+      if (!addressStr) return;
+      
+      // Try primary balance API first
+      let response = await fetch(`/api/balance?address=${addressStr}`);
+      let data = await response.json();
+      
+      // If primary fails, try alternative API
+      if (!response.ok || (data.balance === 0 && data.debug_info?.message?.includes('not found'))) {
+        console.log('Trying alternative balance API...');
+        response = await fetch(`/api/balance-alt?address=${addressStr}`);
+        data = await response.json();
+      }
       
       if (response.ok) {
-        setBalance(data.balance);
+        const balanceValue = data.balance ?? 0;
+        setBalance(balanceValue);
         setError('');
+        
+        // Log debug info if available
+        if (data.debug_info || data.method) {
+          console.log('Balance fetch info:', data);
+        }
       } else {
-        setError('Failed to fetch balance');
+        console.error('Both balance APIs failed:', data);
+        setError('Failed to fetch balance - account may not be initialized');
+        setBalance(0);
       }
     } catch (error) {
       console.error('Error fetching balance:', error);
       setError('Network error while fetching balance');
+      setBalance(0);
     }
-  };
+  }, [account?.address, getAddressString]);
+
+  const fetchTransactions = useCallback(async (): Promise<void> => {
+    if (!account?.address) return;
+    
+    try {
+      const addressStr = getAddressString(account.address);
+      if (!addressStr) return;
+        
+      const response = await fetch(`/api/account/transactions?address=${addressStr}&limit=5`);
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setTransactions(data.transactions);
+      } else {
+        console.error('Error fetching transactions:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    }
+  }, [account?.address, getAddressString]);
+
+  // Fetch balance and transactions when account changes
+  useEffect(() => {
+    if (account) {
+      fetchBalance();
+      fetchTransactions();
+    }
+  }, [account, fetchBalance, fetchTransactions]);
 
   const handleConnect = async (walletName: string) => {
     setIsLoading(true);
@@ -72,26 +135,32 @@ const WalletConnection: React.FC = () => {
   };
 
   const handleFaucet = async (): Promise<void> => {
-    if (!account) return;
+    if (!account?.address) return;
     
     setIsLoading(true);
     setError('');
     
     try {
+      const addressStr = getAddressString(account.address);
+      if (!addressStr) {
+        setError('Invalid address format');
+        return;
+      }
+        
       const response = await fetch('/api/faucet', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          address: account.address,
+          address: addressStr,
           amount: 100000000 // 1 APT
         }),
       });
 
       const data = await response.json();
       
-      if (response.ok && data.success) {
+      if (data.success) {
         setTxnHash(data.txn_hash || '');
         setError('');
         
@@ -101,22 +170,84 @@ const WalletConnection: React.FC = () => {
           fetchTransactions();
         }, 3000);
       } else {
-        setError(`Faucet request failed: ${data.message}`);
+        // Handle manual faucet instructions
+        if (data.manual_instructions) {
+          const instructions = data.manual_instructions;
+          setError(
+            <div>
+              <p><strong>{instructions.message}</strong></p>
+              <div style={{ marginTop: '10px' }}>
+                {instructions.steps?.map((step: string, index: number) => (
+                  <div key={index} style={{ marginBottom: '5px' }}>
+                    {step}
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: '10px' }}>
+                <strong>Your Address:</strong> <span className="full-address">{addressStr}</span>
+              </div>
+              <div style={{ marginTop: '10px' }}>
+                <a 
+                  href={instructions.faucet_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ 
+                    color: '#1976d2', 
+                    textDecoration: 'underline',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  🚰 Open Testnet Faucet →
+                </a>
+              </div>
+            </div>
+          );
+        } else {
+          setError(`Faucet request failed: ${data.message}`);
+        }
       }
     } catch (error: any) {
-      setError(`Faucet request failed: ${error.message}`);
+      setError(
+        <div>
+          <p>Faucet service is currently unavailable.</p>
+          <p><strong>Please use the manual faucet:</strong></p>
+          <div style={{ marginTop: '10px' }}>
+            <a 
+              href="https://aptoslabs.com/testnet-faucet" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ 
+                color: '#1976d2', 
+                textDecoration: 'underline',
+                fontWeight: 'bold'
+              }}
+            >
+              🚰 Open Testnet Faucet →
+            </a>
+          </div>
+          <div style={{ marginTop: '5px' }}>
+            <strong>Your Address:</strong> <span className="full-address">{getAddressString(account?.address)}</span>
+          </div>
+        </div>
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleTransfer = async (): Promise<void> => {
-    if (!account) return;
+    if (!account?.address) return;
     
     setIsLoading(true);
     setError('');
     
     try {
+      const addressStr = getAddressString(account.address);
+      if (!addressStr) {
+        setError('Invalid address format');
+        return;
+      }
+
       const transaction: TransactionPayload = {
         function: '0x1::coin::transfer',
         functionArguments: [
@@ -146,7 +277,7 @@ const WalletConnection: React.FC = () => {
       }
 
       const response = await signAndSubmitTransaction({
-        sender: account.address,
+        sender: addressStr,
         data: transaction,
       });
       
@@ -165,10 +296,6 @@ const WalletConnection: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const formatAddress = (address: string): string => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   if (!connected) {
@@ -215,8 +342,10 @@ const WalletConnection: React.FC = () => {
     <div className="wallet-container">
       <div className="wallet-info">
         <h2>Wallet Connected ✅</h2>
-        <p><strong>Address:</strong> {formatAddress(account!.address)}</p>
-        <p><strong>Full Address:</strong> <span className="full-address">{account!.address}</span></p>
+        <p><strong>Address:</strong> {account?.address ? formatAddress(account.address) : 'Loading...'}</p>
+        <p><strong>Full Address:</strong> <span className="full-address">
+          {getAddressString(account?.address) || 'Loading...'}
+        </span></p>
         <p><strong>Balance:</strong> {balance.toFixed(4)} APT</p>
         
         {error && (
@@ -261,7 +390,7 @@ const WalletConnection: React.FC = () => {
             disabled={isLoading}
             className="action-btn faucet-btn"
           >
-            {isLoading ? 'Processing...' : 'Request Testnet Tokens'}
+            {isLoading ? 'Processing...' : '🚰 Get Testnet Tokens'}
           </button>
           
           <button 

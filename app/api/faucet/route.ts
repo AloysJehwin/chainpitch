@@ -1,9 +1,4 @@
-// app/api/faucet/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
-
-const aptosConfig = new AptosConfig({ network: Network.TESTNET });
-const aptos = new Aptos(aptosConfig);
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,22 +11,42 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const result = await aptos.fundAccount({
-      accountAddress: address,
-      amount: amount,
-    });
+    // The official faucet now requires authentication, so we'll provide manual instructions
+    console.log('Faucet request received for address:', address);
     
+    // Return manual instructions since automatic faucet requires auth
     return NextResponse.json({
-      success: true,
-      message: 'Faucet request successful',
-      txn_hash: result.hash
-    });
+      success: false,
+      message: 'Automatic faucet is currently unavailable due to authentication requirements.',
+      manual_instructions: {
+        message: 'Please use the manual faucet to get testnet tokens',
+        steps: [
+          '1. Go to https://aptoslabs.com/testnet-faucet',
+          '2. Paste your address in the input field',
+          '3. Click "Fund Account" button',
+          '4. Wait for the transaction to complete',
+          '5. Refresh this page to see your balance'
+        ],
+        address: address,
+        faucet_url: 'https://aptoslabs.com/testnet-faucet'
+      }
+    }, { status: 200 }); // Return 200 instead of 400 since this is expected behavior
+
   } catch (error: any) {
     console.error('Faucet error:', error);
     
     return NextResponse.json({
       success: false,
-      message: 'Faucet request failed',
+      message: 'Faucet service error',
+      manual_instructions: {
+        message: 'Please use the manual faucet to get testnet tokens',
+        steps: [
+          '1. Go to https://aptoslabs.com/testnet-faucet',
+          '2. Paste your address in the input field',
+          '3. Click "Fund Account" button'
+        ],
+        faucet_url: 'https://aptoslabs.com/testnet-faucet'
+      },
       error: error.message || 'Unknown error occurred'
     }, { status: 500 });
   }

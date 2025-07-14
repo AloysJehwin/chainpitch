@@ -18,6 +18,7 @@ const nextConfig = {
         assert: false,
         os: false,
         path: false,
+        buffer: require.resolve('buffer/'),
       };
     }
     return config;

@@ -1,4 +1,8 @@
-/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -223,12 +227,36 @@ body {
   border: 1px solid #fecaca;
   border-radius: 8px;
   border-left: 4px solid #ef4444;
+  line-height: 1.6;
 }
 
 .error-message p {
   color: #b91c1c;
-  margin: 0;
+  margin: 0 0 0.5rem 0;
   font-weight: 500;
+}
+
+.error-message p:last-child {
+  margin-bottom: 0;
+}
+
+.error-message div {
+  color: #b91c1c;
+}
+
+.error-message a {
+  color: #1976d2;
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+.error-message a:hover {
+  color: #1565c0;
+}
+
+.error-message .full-address {
+  background: #fee2e2;
+  border-color: #fca5a5;
 }
 
 .transaction-result {
@@ -409,6 +437,12 @@ body {
   
   .transaction-form {
     padding: 1rem;
+  }
+
+  .transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
   }
 }
 
