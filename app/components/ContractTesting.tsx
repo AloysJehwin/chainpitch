@@ -8,6 +8,15 @@ const ContractTesting: React.FC = () => {
   const [testResults, setTestResults] = useState<any[]>([]);
   const [isRunning, setIsRunning] = useState(false);
 
+  // Helper function to safely render any value
+  const safeRender = (value: any) => {
+    if (value === null || value === undefined) return 'null';
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    return JSON.stringify(value);
+  };
+
   const runContractTests = async () => {
     if (!connected || !account) {
       alert('Please connect your wallet first');
@@ -217,12 +226,12 @@ const ContractTesting: React.FC = () => {
                   )}
                   {test.result.result && (
                     <div>
-                      <strong>Result:</strong> {JSON.stringify(test.result.result)}
+                      <strong>Result:</strong> {safeRender(test.result.result)}
                     </div>
                   )}
-                  {test.result.expected && (
+                  {test.result.expected !== undefined && (
                     <div>
-                      <strong>Expected:</strong> {test.result.expected}
+                      <strong>Expected:</strong> {safeRender(test.result.expected)}
                     </div>
                   )}
                 </div>

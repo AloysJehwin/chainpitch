@@ -24,7 +24,7 @@ const WalletConnection: React.FC = () => {
   const [balance, setBalance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [txnHash, setTxnHash] = useState<string>('');
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string | React.ReactElement>(''); // Changed to support JSX
   const [recipientAddress, setRecipientAddress] = useState<string>('0x1');
   const [amount, setAmount] = useState<string>('0.01');
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -374,7 +374,7 @@ const WalletConnection: React.FC = () => {
         
         {error && (
           <div className="error-message">
-            <p>{error}</p>
+            {typeof error === 'string' ? <p>{error}</p> : error}
           </div>
         )}
         
@@ -418,7 +418,7 @@ const WalletConnection: React.FC = () => {
         
         {error && (
           <div className="error-message">
-            <p>{error}</p>
+            {typeof error === 'string' ? <p>{error}</p> : error}
           </div>
         )}
         
