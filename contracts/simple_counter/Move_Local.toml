@@ -1,0 +1,21 @@
+[package]
+name = "SimpleCounter"
+version = "1.0.0"
+authors = ["Your Name <your.email@example.com>"]
+
+[addresses]
+counter_addr = "_"
+
+[dev-addresses]
+counter_addr = "0xCAFE"
+
+[dependencies.AptosFramework]
+local = "../../../aptos-core/aptos-move/framework/aptos-framework"
+
+[dependencies.AptosStdlib]  
+local = "../../../aptos-core/aptos-move/framework/aptos-stdlib"
+
+[dependencies.MoveStdlib]
+local = "../../../aptos-core/aptos-move/framework/move-stdlib"
+
+[dev-dependencies]

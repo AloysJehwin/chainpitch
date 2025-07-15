@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
+import SmartContractInterface from './SmartContractInterface';
+import ContractTesting from './ContractTesting';
 
 interface TransactionPayload {
   function: string;
@@ -532,6 +534,12 @@ const WalletConnection: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Smart Contract Interface */}
+        <SmartContractInterface />
+
+        {/* Contract Testing Suite */}
+        <ContractTesting />
       </div>
     </div>
   );
