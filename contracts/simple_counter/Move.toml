@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = ["Your Name <your.email@example.com>"]
 
 [addresses]
-counter_addr = "_"
+counter_addr = "0x006e8e66e34913ae5c9e2603a833f3680f0975b53a4ed48977ad6f102df1860e"
 
 [dev-addresses]
 counter_addr = "0x006e8e66e34913ae5c9e2603a833f3680f0975b53a4ed48977ad6f102df1860e"
